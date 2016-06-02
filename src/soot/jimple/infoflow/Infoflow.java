@@ -65,6 +65,7 @@ import soot.jimple.infoflow.util.SootMethodRepresentationParser;
 import soot.jimple.infoflow.util.SystemClassHandler;
 import soot.jimple.toolkits.callgraph.ReachableMethods;
 import soot.options.Options;
+import st.cs.uni.saarland.de.MudflowHelper;
 /**
  * main infoflow class which triggers the analysis and offers method to customize it.
  *
@@ -430,7 +431,10 @@ public class Infoflow extends AbstractInfoflow {
 				}
 			}
 		}
-
+		
+		MudflowHelper.setCollectedSources(this.getCollectedSources());
+		MudflowHelper.setCollectedSinks(this.getCollectedSinks());
+		
 		for (ResultsAvailableHandler handler : onResultsAvailable)
 			handler.onResultsAvailable(iCfg, results);
 
@@ -556,7 +560,7 @@ public class Infoflow extends AbstractInfoflow {
 			PatchingChain<Unit> units = m.getActiveBody().getUnits();
 			for (Unit u : units) {
 				Stmt s = (Stmt) u;
-				if (sourcesSinks.getSourceInfo(s, iCfg) != null) {
+				if (MudflowHelper.isClassInPackage(className) && sourcesSinks.getSourceInfo(s, iCfg) != null) {
 					forwardProblem.addInitialSeeds(u, Collections.singleton(forwardProblem.zeroValue()));
 					if (getConfig().getLogSourcesAndSinks())
 						collectedSources.add(s);
