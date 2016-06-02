@@ -30,6 +30,7 @@ import soot.jimple.infoflow.nativ.INativeCallHandler;
 import soot.jimple.infoflow.source.DefaultSourceSinkManager;
 import soot.jimple.infoflow.taintWrappers.ITaintPropagationWrapper;
 import soot.options.Options;
+import st.cs.uni.saarland.de.MudflowHelper;
 
 /**
  * Abstract base class for all data/information flow analyses in FlowDroid
@@ -180,6 +181,8 @@ public abstract class AbstractInfoflow implements IInfoflow {
 		logger.info("Resetting Soot...");
 		soot.G.reset();
 				
+		Options.v().set_exclude(MudflowHelper.getAdLibs());
+		Options.v().set_process_multiple_dex(true);
 		Options.v().set_no_bodies_for_excluded(true);
 		Options.v().set_allow_phantom_refs(true);
 		if (logger.isDebugEnabled())
