@@ -6,3 +6,6 @@ target
 /ant.settings
 reports
 /build
+.idea/
+*.iml
+*.eml
