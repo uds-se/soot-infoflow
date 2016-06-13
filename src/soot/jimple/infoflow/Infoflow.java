@@ -10,27 +10,9 @@
 package soot.jimple.infoflow;
 
 import heros.solver.CountingThreadPoolExecutor;
-
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import soot.MethodOrMethodContext;
-import soot.PackManager;
-import soot.PatchingChain;
-import soot.Scene;
-import soot.SootMethod;
-import soot.Unit;
+import soot.*;
 import soot.jimple.Stmt;
 import soot.jimple.infoflow.InfoflowConfiguration.CallgraphAlgorithm;
 import soot.jimple.infoflow.InfoflowConfiguration.CodeEliminationMode;
@@ -66,6 +48,10 @@ import soot.jimple.infoflow.util.SystemClassHandler;
 import soot.jimple.toolkits.callgraph.ReachableMethods;
 import soot.options.Options;
 import st.cs.uni.saarland.de.MudflowHelper;
+
+import java.util.*;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 /**
  * main infoflow class which triggers the analysis and offers method to customize it.
  *
@@ -193,7 +179,7 @@ public class Infoflow extends AbstractInfoflow {
 	 * @param additionalSeeds Additional seeds at which to create A ZERO fact
 	 * even if they are not sources
 	 */
-	private void runAnalysis(final ISourceSinkManager sourcesSinks, final Set<String> additionalSeeds) {
+	public void runAnalysis(final ISourceSinkManager sourcesSinks, final Set<String> additionalSeeds) {
 		// Clear the data from previous runs
 		maxMemoryConsumption = -1;
 		results = null;
