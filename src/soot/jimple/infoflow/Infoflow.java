@@ -180,6 +180,17 @@ public class Infoflow extends AbstractInfoflow {
 	 * even if they are not sources
 	 */
 	public void runAnalysis(final ISourceSinkManager sourcesSinks, final Set<String> additionalSeeds) {
+		runAnalysis(sourcesSinks, additionalSeeds, null);
+	}
+
+
+	/**
+	 * Conducts a taint analysis on an already initialized callgraph
+	 * @param sourcesSinks The sources and sinks to be used
+	 * @param additionalSeeds Additional seeds at which to create A ZERO fact
+	 * even if they are not sources
+	 */
+	public void runAnalysis(final ISourceSinkManager sourcesSinks, final Set<String> additionalSeeds, SootMethod entryPoint) {
 		// Clear the data from previous runs
 		maxMemoryConsumption = -1;
 		results = null;
@@ -302,7 +313,7 @@ public class Infoflow extends AbstractInfoflow {
 		int sinkCount = 0;
         logger.info("Looking for sources and sinks...");
 
-        for (SootMethod sm : getMethodsForSeeds(iCfg))
+        for (SootMethod sm : getMethodsForSeeds(iCfg, entryPoint))
 			sinkCount += scanMethodForSourcesSinks(sourcesSinks, forwardProblem, sm);
 
 		// We optionally also allow additional seeds to be specified
@@ -478,12 +489,18 @@ public class Infoflow extends AbstractInfoflow {
     	builder.shutdown();
 	}
 
-	private Collection<SootMethod> getMethodsForSeeds(IInfoflowCFG icfg) {
+	private Collection<SootMethod> getMethodsForSeeds(IInfoflowCFG icfg, SootMethod entryPoint) {
 		List<SootMethod> seeds = new LinkedList<SootMethod>();
 		// If we have a callgraph, we retrieve the reachable methods. Otherwise,
 		// we have no choice but take all application methods as an approximation
 		if (Scene.v().hasCallGraph()) {
-			List<MethodOrMethodContext> eps = new ArrayList<MethodOrMethodContext>(Scene.v().getEntryPoints());
+			List<MethodOrMethodContext> eps;
+			if(entryPoint == null) {
+				eps = new ArrayList<MethodOrMethodContext>(Scene.v().getEntryPoints());
+			}
+			else{
+				eps = new ArrayList<MethodOrMethodContext>(Collections.singletonList(entryPoint));
+			}
 			ReachableMethods reachableMethods = new ReachableMethods(Scene.v().getCallGraph(), eps.iterator(), null);
 			reachableMethods.update();
 			for (Iterator<MethodOrMethodContext> iter = reachableMethods.listener(); iter.hasNext();)
