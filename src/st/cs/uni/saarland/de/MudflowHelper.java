@@ -46,11 +46,15 @@ public class MudflowHelper {
 	
 	public static void setCollectedSources(Set<Stmt> sources){
 		collectedSources = new HashSet<>();
-		collectedSources.addAll(sources);
+		if(sources != null){
+			collectedSources.addAll(sources);
+		}
 	}
 	public static void setCollectedSinks(Set<Stmt> sinks){
 		collectedSinks = new HashSet<>();
-		collectedSinks.addAll(sinks);
+		if(sinks != null){
+			collectedSinks.addAll(sinks);
+		}
 	}
 	
 	public static Set<Stmt> getCollectedSources(){
