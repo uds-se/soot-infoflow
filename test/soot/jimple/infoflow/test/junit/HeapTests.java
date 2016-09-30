@@ -131,7 +131,7 @@ public class HeapTests extends JUnitTests {
 		negativeCheckInfoflow(infoflow);
 	}
 	
-	@Test//(timeout = 300000)
+	@Test(timeout = 300000)
 	public void heapTest1() {
 		IInfoflow infoflow = initInfoflow();
 		List<String> epoints = new ArrayList<String>();
@@ -521,7 +521,6 @@ public class HeapTests extends JUnitTests {
 		InfoflowConfiguration.setAccessPathLength(4);
 		
 		IInfoflow infoflow = initInfoflow();
-		infoflow.getConfig().setAliasingAlgorithm(AliasingAlgorithm.PtsBased);
 		infoflow.getConfig().setInspectSources(false);
 		infoflow.getConfig().setInspectSinks(false);
 		infoflow.getConfig().setEnableImplicitFlows(false);
@@ -1173,6 +1172,46 @@ public class HeapTests extends JUnitTests {
 		infoflow.computeInfoflow(appPath, libPath, epoints, sources, sinks);
 		checkInfoflow(infoflow, 1);
 		Assert.assertEquals(2, infoflow.getResults().numConnections());
+	}
+	
+	@Test(timeout = 300000)
+	public void contextTest1() {
+		IInfoflow infoflow = initInfoflow();
+		List<String> epoints = new ArrayList<String>();
+		epoints.add("<soot.jimple.infoflow.test.HeapTestCode: void contextTest1()>");
+		infoflow.computeInfoflow(appPath, libPath, epoints, sources, sinks);
+		negativeCheckInfoflow(infoflow);
+	}
+	
+	@Test(timeout = 300000)
+	public void contextTest2() {
+		IInfoflow infoflow = initInfoflow();
+		List<String> epoints = new ArrayList<String>();
+		epoints.add("<soot.jimple.infoflow.test.HeapTestCode: void contextTest2()>");
+		infoflow.computeInfoflow(appPath, libPath, epoints, sources, sinks);
+		negativeCheckInfoflow(infoflow);
+	}
+	
+	@Test(timeout = 300000)
+	public void contextTest3() {
+		IInfoflow infoflow = initInfoflow();
+		List<String> epoints = new ArrayList<String>();
+		epoints.add("<soot.jimple.infoflow.test.HeapTestCode: void contextTest3()>");
+		infoflow.computeInfoflow(appPath, libPath, epoints, sources, sinks);
+		negativeCheckInfoflow(infoflow);
+	}
+
+	@Test(timeout = 300000)
+	public void summaryTest1() {
+		// This test is highly dependent upon when a summary is created vs.
+		// when it is used, so we run it multiple times.
+		for (int i = 0; i < 10; i++) {
+			IInfoflow infoflow = initInfoflow();
+			List<String> epoints = new ArrayList<String>();
+			epoints.add("<soot.jimple.infoflow.test.HeapTestCode: void summaryTest1()>");
+			infoflow.computeInfoflow(appPath, libPath, epoints, sources, sinks);
+			checkInfoflow(infoflow, 1);
+		}
 	}
 
 }

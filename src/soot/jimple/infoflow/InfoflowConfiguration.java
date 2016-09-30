@@ -72,7 +72,7 @@ public class InfoflowConfiguration {
 	private static boolean mergeNeighbors = false;
 	private static boolean useTypeTightening = true;
 	
-	private boolean stopAfterFirstFlow = false;
+	private int stopAfterFirstKFlows = 0;
 	private boolean enableImplicitFlows = false;
 	private boolean enableStaticFields = true;
 	private boolean enableExceptions = true;
@@ -92,13 +92,14 @@ public class InfoflowConfiguration {
 	private CodeEliminationMode codeEliminationMode = CodeEliminationMode.PropagateConstants;
 
 	private boolean taintAnalysisEnabled = true;
+	private boolean incrementalResultReporting = false;
 	
 	/**
 	 * Merges the given configuration options into this configuration object
 	 * @param config The configuration data to merge in
 	 */
 	public void merge(InfoflowConfiguration config) {
-		this.stopAfterFirstFlow = config.stopAfterFirstFlow;
+		this.stopAfterFirstKFlows = config.stopAfterFirstKFlows;
 		this.enableImplicitFlows = config.enableImplicitFlows;
 		this.enableStaticFields = config.enableStaticFields;
 		this.enableExceptions = config.enableExceptions;
@@ -107,12 +108,18 @@ public class InfoflowConfiguration {
 		this.enableTypeChecking = config.enableTypeChecking;
 		this.ignoreFlowsInSystemPackages = config.ignoreFlowsInSystemPackages;
 		this.maxThreadNum = config.maxThreadNum;
-		this.inspectSources = config.inspectSources;
-		this.inspectSinks = config.inspectSinks;
+		this.writeOutputFiles = config.writeOutputFiles;
+		this.logSourcesAndSinks = config.logSourcesAndSinks;
+		
 		this.callgraphAlgorithm = config.callgraphAlgorithm;
 		this.aliasingAlgorithm = config.aliasingAlgorithm;
-		this.codeEliminationMode = config.codeEliminationMode;
-		this.logSourcesAndSinks = config.logSourcesAndSinks;
+		this.codeEliminationMode = config.codeEliminationMode;		
+		
+		this.inspectSources = config.inspectSources;
+		this.inspectSinks = config.inspectSinks;
+		
+		this.taintAnalysisEnabled = config.taintAnalysisEnabled;
+		this.incrementalResultReporting = config.incrementalResultReporting;
 	}
 	
 	/**
@@ -253,6 +260,22 @@ public class InfoflowConfiguration {
 	public static void setUseThisChainReduction(boolean useThisChainReduction) {
 		InfoflowConfiguration.useThisChainReduction = useThisChainReduction;
 	}
+
+	/**
+	 * Sets after how many flows the information flow analysis shall stop.
+	 * @param stopAfterFirstKFlows number of flows after which to stop
+	 */
+	public void setStopAfterFirstKFlows(int stopAfterFirstKFlows) {
+		this.stopAfterFirstKFlows = stopAfterFirstKFlows;
+	}
+
+	/**
+	 * Gets after how many flows the information flow analysis shall stop.
+	 * @return number of flows after which to stop
+	 */
+	public int getStopAfterFirstKFlows() {
+		return stopAfterFirstKFlows;
+	}
 	
 	/**
 	 * Sets whether the information flow analysis shall stop after the first
@@ -261,9 +284,9 @@ public class InfoflowConfiguration {
 	 * first flow has been found, otherwise false.
 	 */
 	public void setStopAfterFirstFlow(boolean stopAfterFirstFlow) {
-		this.stopAfterFirstFlow = stopAfterFirstFlow;
+		this.stopAfterFirstKFlows = stopAfterFirstFlow ? 1 : 0;
 	}
-	
+
 	/**
 	 * Gets whether the information flow analysis shall stop after the first
 	 * flow has been found
@@ -271,7 +294,7 @@ public class InfoflowConfiguration {
 	 * flow has been found, otherwise false
 	 */
 	public boolean getStopAfterFirstFlow() {
-		return stopAfterFirstFlow;
+		return stopAfterFirstKFlows == 1;
 	}
 	
 	/**
@@ -540,12 +563,43 @@ public class InfoflowConfiguration {
 		this.logSourcesAndSinks = logSourcesAndSinks;
 	}
 
+	/**
+	 * Gets whether the taint analysis is enabled. If it is disabled, FlowDroid
+	 * will initialize the Soot instance and then return immediately.
+	 * @return True if data flow tracking shall be performed, false otherwise
+	 */
 	public boolean isTaintAnalysisEnabled() {
 		return taintAnalysisEnabled;
 	}
 
+	/**
+	 * Sets whether the taint analysis is enabled. If it is disabled, FlowDroid
+	 * will initialize the Soot instance and then return immediately.
+	 * @param taintAnalysisEnabled True if data flow tracking shall be performed,
+	 * false otherwise
+	 */
 	public void setTaintAnalysisEnabled(boolean taintAnalysisEnabled) {
 		this.taintAnalysisEnabled = taintAnalysisEnabled;
+	}
+	
+	/**
+	 * Gets whether the data flow results shall be reported incrementally instead
+	 * of being only available after the full data flow analysis has been completed.
+	 * @return True if incremental data flow results shall be available, otherwise
+	 * false
+	 */
+	public boolean getIncrementalResultReporting() {
+		return this.incrementalResultReporting;
+	}
+	
+	/**
+	 * Sets whether the data flow results shall be reported incrementally instead
+	 * of being only available after the full data flow analysis has been completed.
+	 * @param incrementalReporting True if incremental data flow results shall be
+	 * available, otherwise false
+	 */
+	public void setIncrementalResultReporting(boolean incrementalReporting) {
+		this.incrementalResultReporting = incrementalReporting;
 	}
 
 	/**

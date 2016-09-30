@@ -16,6 +16,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 import soot.RefType;
@@ -100,7 +101,7 @@ public class HeapTestsPtsAliasing extends JUnitTests {
 		negativeCheckInfoflow(infoflow);
 	}
 
-	@Test(timeout = 300000)
+	@Test//(timeout = 300000)
 	public void doubleCallTest() {
 		IInfoflow infoflow = initInfoflow();
 		infoflow.getConfig().setAliasingAlgorithm(AliasingAlgorithm.PtsBased);
@@ -590,6 +591,67 @@ public class HeapTestsPtsAliasing extends JUnitTests {
 		epoints.add("<soot.jimple.infoflow.test.HeapTestCode: void backwardsParameterTest()>");
 		infoflow.computeInfoflow(appPath, libPath, epoints, sources, sinks);
 		checkInfoflow(infoflow, 1);
+	}
+
+	@Test//(timeout = 300000)
+	public void longAPAliasTest1() {
+		IInfoflow infoflow = initInfoflow();
+		infoflow.getConfig().setAliasingAlgorithm(AliasingAlgorithm.PtsBased);
+		infoflow.getConfig().setInspectSources(false);
+		infoflow.getConfig().setInspectSinks(false);
+		infoflow.getConfig().setEnableImplicitFlows(false);
+
+		List<String> epoints = new ArrayList<String>();
+		epoints.add("<soot.jimple.infoflow.test.HeapTestCode: void longAPAliasTest1()>");
+		infoflow.computeInfoflow(appPath, libPath, epoints, sources, sinks);
+		checkInfoflow(infoflow, 1);
+	}
+
+	@Test(timeout = 300000)
+	public void simpleFieldTest1() {
+		IInfoflow infoflow = initInfoflow();
+		infoflow.getConfig().setAliasingAlgorithm(AliasingAlgorithm.PtsBased);
+		infoflow.getConfig().setInspectSources(false);
+		infoflow.getConfig().setInspectSinks(false);
+		infoflow.getConfig().setEnableImplicitFlows(false);
+
+		List<String> epoints = new ArrayList<String>();
+		epoints.add("<soot.jimple.infoflow.test.HeapTestCode: void simpleFieldTest1()>");
+		infoflow.computeInfoflow(appPath, libPath, epoints, sources, sinks);
+		checkInfoflow(infoflow, 1);
+	}
+	
+	@Ignore("missing context-sensitivity in SPARK")
+	@Test(timeout = 300000)
+	public void contextTest1() {
+		IInfoflow infoflow = initInfoflow();
+		infoflow.getConfig().setAliasingAlgorithm(AliasingAlgorithm.PtsBased);
+		List<String> epoints = new ArrayList<String>();
+		epoints.add("<soot.jimple.infoflow.test.HeapTestCode: void contextTest1()>");
+		infoflow.computeInfoflow(appPath, libPath, epoints, sources, sinks);
+		negativeCheckInfoflow(infoflow);
+	}
+
+	@Ignore("missing context-sensitivity in SPARK")
+	@Test(timeout = 300000)
+	public void contextTest2() {
+		IInfoflow infoflow = initInfoflow();
+		infoflow.getConfig().setAliasingAlgorithm(AliasingAlgorithm.PtsBased);
+		List<String> epoints = new ArrayList<String>();
+		epoints.add("<soot.jimple.infoflow.test.HeapTestCode: void contextTest2()>");
+		infoflow.computeInfoflow(appPath, libPath, epoints, sources, sinks);
+		negativeCheckInfoflow(infoflow);
+	}
+
+	@Ignore("missing context-sensitivity in SPARK")
+	@Test(timeout = 300000)
+	public void contextTest3() {
+		IInfoflow infoflow = initInfoflow();
+		infoflow.getConfig().setAliasingAlgorithm(AliasingAlgorithm.PtsBased);
+		List<String> epoints = new ArrayList<String>();
+		epoints.add("<soot.jimple.infoflow.test.HeapTestCode: void contextTest3()>");
+		infoflow.computeInfoflow(appPath, libPath, epoints, sources, sinks);
+		negativeCheckInfoflow(infoflow);
 	}
 
 }

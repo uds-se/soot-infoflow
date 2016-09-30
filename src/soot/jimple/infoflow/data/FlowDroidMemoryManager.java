@@ -1,8 +1,5 @@
 package soot.jimple.infoflow.data;
 
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -176,18 +173,6 @@ public class FlowDroidMemoryManager implements IMemoryManager<Abstraction> {
 				return cachedAbs;
 		}
 		
-		// Sanity check: Abstractions shall not have circles. Really. Trust me.
-		{
-			Set<Abstraction> seenAbstractions = Collections.newSetFromMap(new IdentityHashMap<Abstraction,Boolean>());
-			seenAbstractions.add(obj);
-			Abstraction curAbs = obj;
-			while (curAbs.getPredecessor() != null) {
-				if (!seenAbstractions.add(curAbs.getPredecessor()))
-					System.out.println("ISSUE");
-				curAbs = curAbs.getPredecessor();
-			}
-		}
-		
 		// We check for a cached version of the access path
 		AccessPath newAP = getCachedAccessPath(obj.getAccessPath());
 		obj.setAccessPath(newAP);
@@ -202,22 +187,35 @@ public class FlowDroidMemoryManager implements IMemoryManager<Abstraction> {
 					doErase = true;
 				if (erasePathData == PathDataErasureMode.KeepOnlyContextData
 						&& curAbs.getCorrespondingCallSite() == null
-						&& curAbs.getCurrentStmt() != null
-						&& !curAbs.getCurrentStmt().containsInvokeExpr()
-						&& !(curAbs.getCurrentStmt() instanceof ReturnStmt)
-						&& !(curAbs.getCurrentStmt() instanceof ReturnVoidStmt)) {
-					doErase = true;
+						&& curAbs.getCurrentStmt() != null) {
+					// Lock the abstraction and check again. This is to make sure that no
+					// other thread has already erased the path data in the meantime and
+					// we access null objects.
+					synchronized (curAbs) {
+						if (curAbs.getCorrespondingCallSite() == null
+								&& curAbs.getCurrentStmt() != null
+								&& !curAbs.getCurrentStmt().containsInvokeExpr()
+								&& !(curAbs.getCurrentStmt() instanceof ReturnStmt)
+								&& !(curAbs.getCurrentStmt() instanceof ReturnVoidStmt)) {
+							doErase = true;
+						}
+					}
 				}
-				if (doErase) {
-					curAbs.setCurrentStmt(null);
-					curAbs.setCorrespondingCallSite(null);
+				synchronized (curAbs) {
+					if (doErase) {
+						curAbs.setCurrentStmt(null);
+						curAbs.setCorrespondingCallSite(null);
+					}
 				}
 				curAbs = curAbs.getPredecessor();
 			}
 		}
 		
-		Abstraction pred = obj.getPredecessor();
-		{
+		// If an intermediate statement does not change any taint state, skip it.
+		// Note that we should not do this when we're reconstructing paths or we might
+		// lose statements along the way.
+		if (erasePathData != PathDataErasureMode.EraseNothing) {
+			Abstraction pred = obj.getPredecessor();
 			Abstraction curAbs = pred;
 			while (curAbs != null && curAbs.getNeighbors() == null) {
 				Abstraction predPred = curAbs.getPredecessor();

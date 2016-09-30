@@ -3,6 +3,8 @@ package soot.jimple.infoflow.problems.rules;
 import java.util.Collection;
 
 import soot.Local;
+import soot.SootMethod;
+import soot.ValueBox;
 import soot.jimple.ArrayRef;
 import soot.jimple.AssignStmt;
 import soot.jimple.InstanceFieldRef;
@@ -101,7 +103,18 @@ public class StrongUpdatePropagationRule extends AbstractTaintPropagationRule {
 		else if (source.getAccessPath().isLocal()
 				&& assignStmt.getLeftOp() instanceof Local
 				&& assignStmt.getLeftOp() == source.getAccessPath().getPlainValue()) {
-			killAll.value = true;
+			// If there is also a reference to the tainted value on the right side, we
+			// must only kill the source, but give the other rules the possibility to
+			// re-create the taint
+			boolean found = false;
+			for (ValueBox vb : assignStmt.getRightOp().getUseBoxes())
+				if (vb.getValue() == source.getAccessPath().getPlainValue()) {
+					found = true;
+					break;
+				}
+			
+			killAll.value = !found;
+			killSource.value = true;
 			return null;
 		}
 		
@@ -110,7 +123,8 @@ public class StrongUpdatePropagationRule extends AbstractTaintPropagationRule {
 
 	@Override
 	public Collection<Abstraction> propagateCallFlow(Abstraction d1,
-			Abstraction source, Stmt stmt, ByReferenceBoolean killAll) {
+			Abstraction source, Stmt stmt, SootMethod dest,
+			ByReferenceBoolean killAll) {
 		return null;
 	}
 

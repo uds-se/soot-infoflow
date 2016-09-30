@@ -10,22 +10,20 @@
  ******************************************************************************/
 package soot.jimple.infoflow.problems;
 
-import heros.FlowFunction;
-import heros.FlowFunctions;
-import heros.flowfunc.Identity;
-import heros.flowfunc.KillAll;
-import heros.solver.PathEdge;
-
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
+import heros.FlowFunction;
+import heros.FlowFunctions;
+import heros.flowfunc.Identity;
+import heros.flowfunc.KillAll;
+import heros.solver.PathEdge;
 import soot.ArrayType;
 import soot.Local;
 import soot.PrimType;
 import soot.RefType;
-import soot.Scene;
 import soot.SootMethod;
 import soot.Type;
 import soot.Unit;
@@ -219,7 +217,7 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 					else if (rightValue == source.getAccessPath().getPlainValue()) {
 						Type newType = source.getAccessPath().getBaseType();
 						if (leftValue instanceof ArrayRef)
-							newType = buildArrayOrAddDimension(newType);
+							newType = TypeUtils.buildArrayOrAddDimension(newType);
 						else if (defStmt.getRightOp() instanceof ArrayRef)
 							newType = ((ArrayType) newType).getElementType();
 						
@@ -232,7 +230,7 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 						// type to which we cast. Do not loosen types, though.
 						if (defStmt.getRightOp() instanceof CastExpr) {
 							CastExpr ce = (CastExpr) defStmt.getRightOp();								
-							if (!Scene.v().getFastHierarchy().canStoreType(newType, ce.getCastType()))
+							if (!manager.getHierarchy().canStoreType(newType, ce.getCastType()))
 								newType = ce.getCastType();
 						}
 						// Special type handling for certain operations
@@ -321,7 +319,7 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 						if (targetType != null) {
 							// Special handling for some operations
 							if (defStmt.getRightOp() instanceof ArrayRef)
-								targetType = buildArrayOrAddDimension(targetType);
+								targetType = TypeUtils.buildArrayOrAddDimension(targetType);
 							else if (leftValue instanceof ArrayRef) {
 								assert source.getAccessPath().getBaseType() instanceof ArrayType;
 								targetType = ((ArrayType) targetType).getElementType();
@@ -448,7 +446,7 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 				
 				// Android executor methods are handled specially. getSubSignature()
 				// is slow, so we try to avoid it whenever we can
-				final boolean isExecutorExecute = isExecutorExecute(ie, dest);
+				final boolean isExecutorExecute = interproceduralCFG().isExecutorExecute(ie, dest);
 				
 				return new SolverCallFlowFunction() {
 
@@ -596,7 +594,7 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 				
 				// Android executor methods are handled specially. getSubSignature()
 				// is slow, so we try to avoid it whenever we can
-				final boolean isExecutorExecute = isExecutorExecute(ie, callee);
+				final boolean isExecutorExecute = interproceduralCFG().isExecutorExecute(ie, callee);
 				
 				return new SolverReturnFlowFunction() {
 					
@@ -668,6 +666,12 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 											continue;
 										if (TypeUtils.isStringType(source.getAccessPath().getBaseType())
 												&& !source.getAccessPath().getCanHaveImmutableAliases())
+											continue;
+										
+										// If the variable was overwritten somewehere in the callee, we assume it
+										// to overwritten on all paths (yeah, I know ...) Otherwise, we need SSA
+										// or lots of bookkeeping to avoid FPs (BytecodeTests.flowSensitivityTest1).
+										if (interproceduralCFG().methodWritesValue(callee, paramLocals[i]))
 											continue;
 										
 										Abstraction abs = checkAbstraction(source.deriveNewAbstraction

@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 import soot.jimple.infoflow.IInfoflow;
@@ -52,6 +53,7 @@ public class ExceptionTests extends JUnitTests {
 				excludeList.add("javax.");
 				options.set_exclude(excludeList);
 				options.set_prepend_classpath(false);
+				Options.v().set_ignore_classpath_errors(true);
 			}
 			
 		});
@@ -108,4 +110,41 @@ public class ExceptionTests extends JUnitTests {
 		negativeCheckInfoflow(infoflow);
 	}
 	
+	@Test
+	public void callMethodParamReturnTest1() {
+		IInfoflow infoflow = initInfoflow();
+		List<String> epoints = new ArrayList<String>();
+		epoints.add("<soot.jimple.infoflow.test.ExceptionTestCode: void callMethodParamReturnTest1()>");
+		infoflow.computeInfoflow(appPath, libPath, epoints, sources, sinks);
+		checkInfoflow(infoflow, 1);
+	}
+
+	@Test
+	@Ignore("FlowDroid cannot know that the exception will always happen")
+	public void callMethodParamReturnTest2() {
+		IInfoflow infoflow = initInfoflow();
+		List<String> epoints = new ArrayList<String>();
+		epoints.add("<soot.jimple.infoflow.test.ExceptionTestCode: void callMethodParamReturnTest2()>");
+		infoflow.computeInfoflow(appPath, libPath, epoints, sources, sinks);
+		negativeCheckInfoflow(infoflow);
+	}
+
+	@Test
+	public void callMethodParamReturnTest2b() {
+		IInfoflow infoflow = initInfoflow();
+		List<String> epoints = new ArrayList<String>();
+		epoints.add("<soot.jimple.infoflow.test.ExceptionTestCode: void callMethodParamReturnTest2b()>");
+		infoflow.computeInfoflow(appPath, libPath, epoints, sources, sinks);
+		checkInfoflow(infoflow, 1);
+	}
+
+	@Test
+	public void callMethodParamReturnTest3() {
+		IInfoflow infoflow = initInfoflow();
+		List<String> epoints = new ArrayList<String>();
+		epoints.add("<soot.jimple.infoflow.test.ExceptionTestCode: void callMethodParamReturnTest3()>");
+		infoflow.computeInfoflow(appPath, libPath, epoints, sources, sinks);
+		checkInfoflow(infoflow, 2);
+	}
+
 }

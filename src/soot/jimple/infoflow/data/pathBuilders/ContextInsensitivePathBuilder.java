@@ -1,14 +1,12 @@
 package soot.jimple.infoflow.data.pathBuilders;
 
-import heros.solver.CountingThreadPoolExecutor;
-
 import java.util.Set;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import heros.solver.CountingThreadPoolExecutor;
+import soot.jimple.infoflow.collect.ConcurrentIdentityHashMultiMap;
 import soot.jimple.infoflow.data.Abstraction;
 import soot.jimple.infoflow.data.AbstractionAtSink;
 import soot.jimple.infoflow.data.SourceContext;
@@ -29,30 +27,21 @@ public class ContextInsensitivePathBuilder extends AbstractAbstractionPathBuilde
 
     private final InfoflowResults results = new InfoflowResults();
 	private final CountingThreadPoolExecutor executor;
-			
+	
+	private ConcurrentIdentityHashMultiMap<Abstraction, SourceContextAndPath> pathCache =
+			new ConcurrentIdentityHashMultiMap<>();
+	
 	/**
 	 * Creates a new instance of the {@link ContextSensitivePathBuilder} class
-	 * @param maxThreadNum The maximum number of threads to use
+	 * @param icfg The interprocedural control flow graph
+	 * @param executor The executor in which to run the path reconstruction tasks
 	 * @param reconstructPaths True if the exact propagation path between source
 	 * and sink shall be reconstructed.
 	 */
-	public ContextInsensitivePathBuilder(IInfoflowCFG icfg, int maxThreadNum,
+	public ContextInsensitivePathBuilder(IInfoflowCFG icfg, CountingThreadPoolExecutor executor,
 			boolean reconstructPaths) {
 		super(icfg, reconstructPaths);
-        int numThreads = Runtime.getRuntime().availableProcessors();
-		this.executor = createExecutor(maxThreadNum == -1 ? numThreads
-				: Math.min(maxThreadNum, numThreads));
-	}
-	
-	/**
-	 * Creates a new executor object for spawning worker threads
-	 * @param numThreads The number of threads to use
-	 * @return The generated executor
-	 */
-	private CountingThreadPoolExecutor createExecutor(int numThreads) {
-		return new CountingThreadPoolExecutor
-				(numThreads, Integer.MAX_VALUE, 30, TimeUnit.SECONDS,
-				new LinkedBlockingQueue<Runnable>());
+		this.executor = executor;
 	}
 	
 	/**
@@ -69,7 +58,7 @@ public class ContextInsensitivePathBuilder extends AbstractAbstractionPathBuilde
 		
 		@Override
 		public void run() {
-			final Set<SourceContextAndPath> paths = abstraction.getPaths();
+			final Set<SourceContextAndPath> paths = pathCache.get(abstraction);
 			final Abstraction pred = abstraction.getPredecessor();
 			
 			if (pred != null) {
@@ -97,7 +86,7 @@ public class ContextInsensitivePathBuilder extends AbstractAbstractionPathBuilde
 			
 			// Add the new path
 			checkForSource(pred, extendedScap);
-			return pred.addPathElement(extendedScap);
+			return pathCache.put(pred, extendedScap);
 		}
 	}
 	
@@ -173,20 +162,28 @@ public class ContextInsensitivePathBuilder extends AbstractAbstractionPathBuilde
 		SourceContextAndPath scap = new SourceContextAndPath(
 				abs.getAbstraction().getAccessPath(), abs.getSinkStmt());
 		scap = scap.extendPath(abs.getAbstraction());
-		abs.getAbstraction().addPathElement(scap);
-		
-		if (!checkForSource(abs.getAbstraction(), scap))
-			executor.execute(new SourceFindingTask(abs.getAbstraction()));
+		if (pathCache.put(abs.getAbstraction(), scap))
+			if (!checkForSource(abs.getAbstraction(), scap))
+				executor.execute(new SourceFindingTask(abs.getAbstraction()));
 	}
 	
 	@Override
-	public void shutdown() {
-    	executor.shutdown();		
+	public InfoflowResults getResults() {
+		return this.results;
 	}
 
 	@Override
-	public InfoflowResults getResults() {
-		return this.results;
+	public void runIncrementalPathCompuation() {
+		for (Abstraction abs : pathCache.keySet())
+			for (SourceContextAndPath scap : pathCache.get(abs)) {
+				if (abs.getNeighbors() != null && abs.getNeighbors().size() != scap.getNeighborCounter()) {
+					// This is a path for which we have to process the new neighbors
+					scap.setNeighborCounter(abs.getNeighbors().size());
+					
+					for (Abstraction neighbor : abs.getNeighbors())
+						buildPathForAbstraction(new AbstractionAtSink(neighbor, scap.getStmt()));
+				}
+			}
 	}
 
 }

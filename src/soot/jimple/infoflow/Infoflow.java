@@ -9,8 +9,6 @@
  ******************************************************************************/
 package soot.jimple.infoflow;
 
-import heros.solver.CountingThreadPoolExecutor;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -25,6 +23,7 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import heros.solver.CountingThreadPoolExecutor;
 import soot.MethodOrMethodContext;
 import soot.PackManager;
 import soot.PatchingChain;
@@ -47,18 +46,23 @@ import soot.jimple.infoflow.data.FlowDroidMemoryManager;
 import soot.jimple.infoflow.data.FlowDroidMemoryManager.PathDataErasureMode;
 import soot.jimple.infoflow.data.pathBuilders.DefaultPathBuilderFactory;
 import soot.jimple.infoflow.data.pathBuilders.IAbstractionPathBuilder;
+import soot.jimple.infoflow.data.pathBuilders.IAbstractionPathBuilder.OnPathBuilderResultAvailable;
 import soot.jimple.infoflow.data.pathBuilders.IPathBuilderFactory;
 import soot.jimple.infoflow.entryPointCreators.IEntryPointCreator;
 import soot.jimple.infoflow.handlers.ResultsAvailableHandler;
+import soot.jimple.infoflow.handlers.ResultsAvailableHandler2;
 import soot.jimple.infoflow.handlers.TaintPropagationHandler;
 import soot.jimple.infoflow.problems.BackwardsInfoflowProblem;
 import soot.jimple.infoflow.problems.InfoflowProblem;
+import soot.jimple.infoflow.problems.TaintPropagationResults;
+import soot.jimple.infoflow.problems.TaintPropagationResults.OnTaintPropagationResultAdded;
 import soot.jimple.infoflow.results.InfoflowResults;
 import soot.jimple.infoflow.results.ResultSinkInfo;
 import soot.jimple.infoflow.results.ResultSourceInfo;
 import soot.jimple.infoflow.solver.IMemoryManager;
 import soot.jimple.infoflow.solver.cfg.BackwardsInfoflowCFG;
 import soot.jimple.infoflow.solver.cfg.IInfoflowCFG;
+import soot.jimple.infoflow.solver.fastSolver.BackwardsInfoflowSolver;
 import soot.jimple.infoflow.solver.fastSolver.InfoflowSolver;
 import soot.jimple.infoflow.source.ISourceSinkManager;
 import soot.jimple.infoflow.util.SootMethodRepresentationParser;
@@ -247,7 +251,7 @@ public class Infoflow extends AbstractInfoflow {
 
 		// Initialize the data flow manager
 		InfoflowManager manager = new InfoflowManager(config, null, iCfg, sourcesSinks,
-				taintWrapper);
+				taintWrapper, hierarchy);
 
 		BackwardsInfoflowProblem backProblem = null;
 		InfoflowManager backwardsManager = null;
@@ -256,9 +260,9 @@ public class Infoflow extends AbstractInfoflow {
 		switch (getConfig().getAliasingAlgorithm()) {
 			case FlowSensitive:
 				backwardsManager = new InfoflowManager(config, null,
-						new BackwardsInfoflowCFG(iCfg), sourcesSinks, taintWrapper);
+						new BackwardsInfoflowCFG(iCfg), sourcesSinks, taintWrapper, hierarchy);
 				backProblem = new BackwardsInfoflowProblem(backwardsManager);
-				backSolver = new InfoflowSolver(backProblem, executor);
+				backSolver = new BackwardsInfoflowSolver(backProblem, executor);
 				backSolver.setMemoryManager(memoryManager);
 				backSolver.setJumpPredecessors(!pathBuilderFactory.supportsPathReconstruction());
 //				backSolver.setEnableMergePointChecking(true);
@@ -348,10 +352,47 @@ public class Infoflow extends AbstractInfoflow {
 			taintWrapper.initialize(manager);
 		if (nativeCallHandler != null)
 			nativeCallHandler.initialize(manager);
+		
+		// Register the handler for interim results
+		TaintPropagationResults propagationResults = forwardProblem.getResults();
+		final CountingThreadPoolExecutor resultExecutor = createExecutor(numThreads);
+		final IAbstractionPathBuilder builder = pathBuilderFactory.createPathBuilder(
+				resultExecutor, iCfg);
+		
+		if (config.getIncrementalResultReporting()) {
+			// Create the path builder
+			this.results = new InfoflowResults();
+			propagationResults.addResultAvailableHandler(new OnTaintPropagationResultAdded() {
+				
+				@Override
+				public boolean onResultAvailable(AbstractionAtSink abs) {
+					builder.addResultAvailableHandler(new OnPathBuilderResultAvailable() {
+						
+						@Override
+						public void onResultAvailable(ResultSourceInfo source, ResultSinkInfo sink) {
+							// Notify our external handlers
+							for (ResultsAvailableHandler handler : onResultsAvailable) {
+								if (handler instanceof ResultsAvailableHandler2) {
+									ResultsAvailableHandler2 handler2 = (ResultsAvailableHandler2) handler;
+									handler2.onSingleResultAvailable(source, sink);
+								}
+							}
+					   		results.addResult(sink, source);
+						}
+						
+					});
+					
+					// Compute the result paths
+			   		builder.computeTaintPaths(Collections.singleton(abs));
+					return true;
+				}
+				
+			});
+		}
 
 		forwardSolver.solve();
 		maxMemoryConsumption = Math.max(maxMemoryConsumption, getUsedMemory());
-
+		
 		// Not really nice, but sometimes Heros returns before all
 		// executor tasks are actually done. This way, we give it a
 		// chance to terminate gracefully before moving on.
@@ -371,14 +412,14 @@ public class Infoflow extends AbstractInfoflow {
 		}
 		if (executor.getActiveCount() != 0 || !executor.isTerminated())
 			logger.error("Executor did not terminate gracefully");
-
+		
 		// Print taint wrapper statistics
 		if (taintWrapper != null) {
 			logger.info("Taint wrapper hits: " + taintWrapper.getWrapperHits());
 			logger.info("Taint wrapper misses: " + taintWrapper.getWrapperMisses());
 		}
 
-		Set<AbstractionAtSink> res = forwardProblem.getResults();
+		Set<AbstractionAtSink> res = propagationResults.getResults();
 
 		// We need to prune access paths that are entailed by another one
 		for (Iterator<AbstractionAtSink> absAtSinkIt = res.iterator(); absAtSinkIt.hasNext(); ) {
@@ -413,7 +454,34 @@ public class Infoflow extends AbstractInfoflow {
 		forwardProblem = null;
 		Runtime.getRuntime().gc();
 
-		computeTaintPaths(res);
+		if (!config.getIncrementalResultReporting()) {
+	   		builder.computeTaintPaths(res);
+	   		if (this.results == null)
+	   			this.results = builder.getResults();
+	   		else
+	   			this.results.addAll(builder.getResults());
+		}
+		
+		// Wait for the path builders to terminate
+		try {
+			resultExecutor.awaitCompletion();
+		} catch (InterruptedException e) {
+			logger.error("Could not wait for executor termination", e);
+		}
+
+		if (config.getIncrementalResultReporting()) {
+			// After the last intermediate result has been computed, we need to
+			// re-process those abstractions that received new neighbors in the
+			// meantime
+			builder.runIncrementalPathCompuation();
+			
+			try {
+				resultExecutor.awaitCompletion();
+			} catch (InterruptedException e) {
+				logger.error("Could not wait for executor termination", e);
+			}			
+		}
+		resultExecutor.shutdown();
 
 		if (results == null || results.getResults().isEmpty())
 			logger.warn("No results found.");
@@ -476,22 +544,7 @@ public class Infoflow extends AbstractInfoflow {
 				Integer.MAX_VALUE, 30, TimeUnit.SECONDS,
 				new LinkedBlockingQueue<Runnable>());
 	}
-
-	/**
-	 * Computes the path of tainted data between the source and the sink
-	 * @param res The data flow tracker results
-	 */
-	protected void computeTaintPaths(final Set<AbstractionAtSink> res) {
-		IAbstractionPathBuilder builder = this.pathBuilderFactory.createPathBuilder
-				(config.getMaxThreadNum(), iCfg);
-   		builder.computeTaintPaths(res);
-   		if (this.results == null)
-   			this.results = builder.getResults();
-   		else
-   			this.results.addAll(builder.getResults());
-    	builder.shutdown();
-	}
-
+	
 	private Collection<SootMethod> getMethodsForSeeds(IInfoflowCFG icfg) {
 		List<SootMethod> seeds = new LinkedList<SootMethod>();
 		// If we have a callgraph, we retrieve the reachable methods. Otherwise,

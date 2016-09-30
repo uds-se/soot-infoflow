@@ -30,6 +30,7 @@ import soot.Value;
 import soot.ValueBox;
 import soot.jimple.AssignStmt;
 import soot.jimple.FieldRef;
+import soot.jimple.InvokeExpr;
 import soot.jimple.StaticFieldRef;
 import soot.jimple.Stmt;
 import soot.jimple.toolkits.callgraph.Edge;
@@ -108,6 +109,26 @@ public class InfoflowCFG implements IInfoflowCFG {
 				}
 			});
 	
+	protected final LoadingCache<SootMethod,Local[]> methodToWrittenLocals =
+			IDESolver.DEFAULT_CACHE_BUILDER.build( new CacheLoader<SootMethod,Local[]>() {
+				@Override
+				public Local[] load(SootMethod method) throws Exception {
+					if (!method.isConcrete() || !method.hasActiveBody())
+						return new Local[0];
+					
+					List<Local> lcs = new ArrayList<Local>(method.getActiveBody().getLocalCount());
+					
+					for (Unit u : method.getActiveBody().getUnits())
+						if (u instanceof AssignStmt) {
+							AssignStmt assignStmt = (AssignStmt) u;
+							if (assignStmt.getLeftOp() instanceof Local)
+								lcs.add((Local) assignStmt.getLeftOp());
+						}
+					
+					return lcs.toArray(new Local[lcs.size()]);
+				}
+			});
+
 	public InfoflowCFG() {
 		this(new JimpleBasedInterproceduralCFG());
 	}
@@ -387,6 +408,16 @@ public class InfoflowCFG implements IInfoflowCFG {
 	}
 	
 	@Override
+	public boolean methodWritesValue(SootMethod m, Value v) {
+		Local[] writes = methodToWrittenLocals.getUnchecked(m);
+		if (writes != null)
+			for (Local l : writes)
+				if (l == v)
+					return true;
+		return false;
+	}
+
+	@Override
 	public boolean isExceptionalEdgeBetween(Unit u1, Unit u2) {
 		SootMethod m1 = getMethodOf(u1);
 		SootMethod m2 = getMethodOf(u2);
@@ -406,6 +437,49 @@ public class InfoflowCFG implements IInfoflowCFG {
 	@Override
 	public boolean isReachable(Unit u) {
 		return delegate.isReachable(u);
+	}
+	
+	@Override
+	public boolean isExecutorExecute(InvokeExpr ie, SootMethod dest) {
+		if (ie == null || dest == null)
+			return false;
+		
+		SootMethod ieMethod = ie.getMethod();
+		if (!ieMethod.getName().equals("execute") && !ieMethod.getName().equals("doPrivileged"))
+			return false;
+		
+		final String ieSubSig = ieMethod.getSubSignature();
+		final String calleeSubSig = dest.getSubSignature();
+		
+		if (ieSubSig.equals("void execute(java.lang.Runnable)")
+				&& calleeSubSig.equals("void run()"))
+			return true;
+		
+		if (calleeSubSig.equals("java.lang.Object run()")) {
+			if (ieSubSig.equals("java.lang.Object doPrivileged(java.security.PrivilegedAction)"))
+				return true;
+			if (ieSubSig.equals("java.lang.Object doPrivileged(java.security.PrivilegedAction,"
+					+ "java.security.AccessControlContext)"))
+				return true;
+			if (ieSubSig.equals("java.lang.Object doPrivileged(java.security.PrivilegedExceptionAction)"))
+				return true;
+			if (ieSubSig.equals("java.lang.Object doPrivileged(java.security.PrivilegedExceptionAction,"
+					+ "java.security.AccessControlContext)"))
+				return true;
+		}
+		return false;
+	}
+
+	@Override
+	public Collection<SootMethod> getOrdinaryCalleesOfCallAt(Unit u) {
+		InvokeExpr iexpr = ((Stmt) u).getInvokeExpr();
+		
+		Collection<SootMethod> originalCallees = getCalleesOfCallAt(u);
+		List<SootMethod> callees = new ArrayList<>(originalCallees.size());
+		for (SootMethod sm : originalCallees)
+			if (!sm.isStaticInitializer() && !isExecutorExecute(iexpr, sm))
+				callees.add(sm);
+		return callees;
 	}
 	
 }

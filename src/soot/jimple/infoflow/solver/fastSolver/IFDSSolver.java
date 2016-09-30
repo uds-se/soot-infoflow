@@ -42,7 +42,6 @@ import soot.SootMethod;
 import soot.Unit;
 import soot.jimple.infoflow.collect.ConcurrentHashSet;
 import soot.jimple.infoflow.collect.MyConcurrentHashMap;
-import soot.jimple.infoflow.data.Abstraction;
 import soot.jimple.infoflow.solver.IMemoryManager;
 import soot.jimple.toolkits.ide.icfg.BiDiInterproceduralCFG;
 
@@ -111,13 +110,13 @@ public class IFDSSolver<N,D extends FastSolverLinkedNode<D, N>,M,I extends BiDiI
 	protected final boolean followReturnsPastSeeds;
 	
 	@DontSynchronize("readOnly")
-	private boolean setJumpPredecessors = false;
+	protected boolean setJumpPredecessors = false;
 	
 	@DontSynchronize("readOnly")
 	private boolean enableMergePointChecking = false;
 	
 	@DontSynchronize("readOnly")
-	private IMemoryManager<D> memoryManager = null;
+	protected IMemoryManager<D> memoryManager = null;
 	
 	/**
 	 * Creates a solver for the given problem, which caches flow functions and edge functions.
@@ -247,8 +246,6 @@ public class IFDSSolver<N,D extends FastSolverLinkedNode<D, N>,M,I extends BiDiI
 		final D d1 = edge.factAtSource();
 		final N n = edge.getTarget(); // a call node; line 14...
 
-        logger.trace("Processing call to {}", n);
-        
 		final D d2 = edge.factAtTarget();
 		assert d2 != null;
 		Collection<N> returnSiteNs = icfg.getReturnSitesOfCallAt(n);
@@ -286,7 +283,7 @@ public class IFDSSolver<N,D extends FastSolverLinkedNode<D, N>,M,I extends BiDiI
 				//for each already-queried exit value <eP,d4> reachable from <sP,d3>,
 				//create new caller-side jump functions to the return sites
 				//because we have observed a potentially new incoming edge into <sP,d3>
-				if (endSumm != null)
+				if (endSumm != null && !endSumm.isEmpty())
 					for(Pair<N, D> entry: endSumm) {
 						N eP = entry.getO1();
 						D d4 = entry.getO2();
@@ -546,8 +543,6 @@ public class IFDSSolver<N,D extends FastSolverLinkedNode<D, N>,M,I extends BiDiI
 		}
 		else {
 			scheduleEdgeProcessing(edge);
-			if(targetVal!=zeroValue)
-				logger.trace("EDGE: <{},{}> -> <{},{}>", icfg.getMethodOf(target), sourceVal, target, targetVal);
 		}
 	}
 	
